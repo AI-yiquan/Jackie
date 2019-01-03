@@ -32,13 +32,7 @@ def get_user_info():
 @api.route('/users',methods=['PUT'])
 @login_required
 def update_user_name():
-    """修改用户信息视图函数：
-    0.登录校验  @login_required
-    1.获取参数 name
-    2.查询用户，更新用户名
-    3.修改session中的name
-    :return: 响应结果
-    """
+    """修改用户信息视图函数"""
     json_dict=request.json
     user_id=g.user_id
     name=json_dict.get('name')
@@ -65,31 +59,39 @@ def update_user_name():
 @api.route('/users/avatar',methods=['POST'])
 @login_required
 def update_user_avatar():
-    """修改用户头像：
-    0.登录校验 @login_required
-    :param  前端传来的image文件,g变量中的user_id
-    1.上传到七牛云
-    2.返回key，保存到数据库
-    :return: 成功返回用户头像
-    """
+    """修改用户头像"""
     # 获取图片数据
-    avatar=request.files.get('avatar')
-    user_id=g.user_id
-    if not avatar:
-        return jsonify(re_code=RET.PARAMERR,msg='图片不能为空')
-
-    # 1.上传到七牛云
-    key=upload_image(avatar)
-    # 2.保存到数据库
+    avatar = request.files.get('avatar')
+    user_id = g.user_id
+    # 判断用户是否存在
     try:
-        user=User.query.get(user_id)
+        user = User.query.get(user_id)
     except Exception as e :
         current_app.logger.debug(e)
         return jsonify(re_code=RET.DBERR,msg='查询用户失败')
     if not user:
         return jsonify(re_code=RET.NODATA,msg='用户不存在')
-    user.avatar_url=key
+
+    if not avatar:
+        return jsonify(re_code=RET.PARAMERR,msg='图片不能为空')
+    # 读取图片数据
     try:
+        image_data = avatar.read()
+    except Exception as e:
+        current_app.logger.debug(e)
+        return jsonify(re_code=RET.DATAERR,msg='数据读取错误')
+    # 调用七牛云
+    try:
+        image_name = upload_image(image_data)
+        print(image_name)
+    except Exception as e:
+        current_app.logger.debug(e)
+        return jsonify(re_code=RET.THIRDERR,msg='上传图片异常')
+    # 2.保存到数据库
+
+    user.avatar_url = image_name
+    try:
+        db.session.add(user)
         db.session.commit()
     except Exception as e:
         current_app.logger.debug(e)
@@ -97,14 +99,15 @@ def update_user_avatar():
         return jsonify(re_code=RET.DBERR,msg='保存头像失败')
     # 拼接头像地址，返回前端
     avatar_url=constants.QINIU_DOMIN_PREFIX+user.avatar_url
-    return jsonify(re_code=RET.OK,msg='上传头像成功',avatar_url=avatar_url)
+    # 定义字典数据
+    data = {
+        'avatar_url':avatar_url
+    }
+    return jsonify(re_code=RET.OK,msg='上传头像成功',data=data)
 
 @api.route('/sessions')
 def check_login():
-    """用户判断用户是否登录的接口：方便前端工作
-    1.获取session中的user_id,name
-    :return: user_id,name
-    """
+    """用户判断用户是否登录的接口"""
     user_id=session.get('user_id')
     name=session.get('name')
 
@@ -113,11 +116,7 @@ def check_login():
 @api.route('/users/auth')
 @login_required
 def get_user_auth():
-    """获取实名认证信息：
-    0.校验是否登录 @login_required
-    1.根据g变量中的user_id获取user
-    2.返回响应real_name,id_card
-    """
+    """获取实名认证信息"""
     user_id=g.user_id
     try:
         user=User.query.get(user_id)
@@ -131,16 +130,10 @@ def get_user_auth():
 @api.route('/users/auth',methods=['POST'])
 @login_required
 def set_user_auth():
-    """设置用户实名认证信息：
-    0.登录校验  @login_required
-    1.获取前端数据：real_name,id_card校验完整性，获取g变量中的user_id
-    2.查询user,并设置用户实名认证信息
-    3.返回响应
-    """
+    """设置用户实名认证信息"""
     # 1.获取前端数据：real_name,id_card校验完整性，获取g变量中的user_id
-    json_dict=request.json
-    real_name=json_dict.get('real_name')
-    id_card=json_dict.get('id_card')
+    real_name=request.json.get('real_name')
+    id_card=request.json.get('id_card')
     user_id=g.user_id
 
     if not all([real_name,id_card]):

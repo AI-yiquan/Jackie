@@ -94,9 +94,9 @@ def send_sms_code():
         result = ccp.send_template_sms(phone_num,[sms_code,constants.SMS_CODE_REDIS_EXPIRES/60],1)
     except Exception as e:
         current_app.logger.debug(e)
-        return jsonify(errno=RET.THIRDERR,errmsg='短信发送异常')
+        return jsonify(re_code=RET.THIRDERR,msg='短信发送异常')
     if result == 0:
-        return jsonify(errno=RET.OK,errmsg='短信发送成功')
+        return jsonify(re_code=RET.OK,msg='短信发送成功')
     else:
         return jsonify(re_code=RET.THIRDERR,msg='验证码发送失败')
 
